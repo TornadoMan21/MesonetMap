@@ -4,7 +4,6 @@ import threading
 import schedule
 import time
 from datetime import datetime
-from src.main import main as generate_weather_map
 
 app = Flask(__name__)
 
@@ -12,6 +11,91 @@ app = Flask(__name__)
 MAPS_DIR = "maps"
 if not os.path.exists(MAPS_DIR):
     os.makedirs(MAPS_DIR)
+
+def generate_weather_map():
+    """Generate weather map without user interaction"""
+    import sys
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    
+    # Import and run the weather mapping function
+    from src.data.mesonet_fetcher import fetch_all_mesonet_data
+    from src.main import create_combined_weather_map_centered_rockville, convert_mesonet_to_weather_data, convert_asos_to_weather_data
+    import pandas as pd
+    
+    try:
+        print(f"Generating weather map at {datetime.now()}")
+        
+        # Fetch data from all sources
+        md_data, pa_file, va_data, asos_data = fetch_all_mesonet_data()
+        
+        # Process Maryland data
+        maryland_data = []
+        if hasattr(md_data, 'empty') and not md_data.empty:
+            maryland_data = convert_mesonet_to_weather_data(md_data)
+        
+        # Process Pennsylvania data  
+        pennsylvania_data = []
+        if pa_file and os.path.exists(pa_file):
+            import pandas as pd
+            pa_df = pd.read_csv(pa_file, encoding='utf-8')
+            # Convert PA data to weather format
+            for _, row in pa_df.iterrows():
+                if pd.notna(row.get('t')) and pd.notna(row.get('mslp')):
+                    try:
+                        pennsylvania_data.append({
+                            'name': row.get('name', 'Unknown'),
+                            'lat': float(row.get('latitude')),
+                            'lon': float(row.get('longitude')),
+                            'temp_f': float(row.get('t')),
+                            'pressure': float(row.get('mslp')),
+                            'source': 'PA Keystone'
+                        })
+                    except (ValueError, TypeError):
+                        continue
+        
+        # Process Virginia data
+        virginia_data = []
+        if hasattr(va_data, 'empty') and not va_data.empty:
+            virginia_data = convert_mesonet_to_weather_data(va_data)
+        
+        # Process ASOS data
+        asos_stations = []
+        if asos_data:
+            asos_stations = convert_asos_to_weather_data(asos_data)
+        
+        # Combine all data with deduplication
+        combined_data = maryland_data + pennsylvania_data + virginia_data + asos_stations
+        all_weather_data = []
+        seen_locations = set()
+        
+        for station in combined_data:
+            lat_key = round(station['lat'], 2)
+            lon_key = round(station['lon'], 2)
+            location_key = (lat_key, lon_key)
+            
+            if location_key not in seen_locations:
+                seen_locations.add(location_key)
+                all_weather_data.append(station)
+        
+        print(f"Processing {len(all_weather_data)} unique weather stations")
+        
+        # Create the map
+        if all_weather_data:
+            combined_map = create_combined_weather_map_centered_rockville(all_weather_data)
+            if combined_map:
+                map_file = os.path.join(MAPS_DIR, "mesonet_combined_weather_map.html")
+                combined_map.save(map_file)
+                print(f"Weather map saved to: {map_file}")
+                return True
+        
+        print("No weather data available")
+        return False
+        
+    except Exception as e:
+        print(f"Error generating weather map: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 @app.route('/')
 def index():
@@ -63,27 +147,26 @@ def update_maps_scheduled():
 
 def generate_map_wrapper():
     """Wrapper function for scheduled map generation"""
-    print(f"Generating weather map at {datetime.now()}")
-    try:
-        generate_weather_map()
-        print("Weather map generated successfully")
-    except Exception as e:
-        print(f"Error generating weather map: {e}")
-
-# Schedule map updates every 2 hours
-schedule.every(2).hours.do(generate_map_wrapper)
+    generate_weather_map()
 
 if __name__ == '__main__':
     # Generate initial map
     print("Generating initial weather map...")
-    try:
-        generate_weather_map()
-    except Exception as e:
-        print(f"Warning: Could not generate initial map: {e}")
+    generate_weather_map()
+    
+    # Schedule map updates every 2 hours
+    schedule.every(2).hours.do(generate_map_wrapper)
     
     # Start background scheduler
+    def update_maps_scheduled():
+        while True:
+            schedule.run_pending()
+            time.sleep(60)
+    
     threading.Thread(target=update_maps_scheduled, daemon=True).start()
     
     # Run Flask app
     port = int(os.environ.get('PORT', 5000))
+    print(f"Starting Flask app on port {port}")
+    print(f"Visit: http://localhost:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)

@@ -455,7 +455,7 @@ def create_combined_weather_map_centered_rockville(weather_data):
         popup_content = f"""
         <div style="font-family: Arial; min-width: 250px;">
         <b>{station['name']}</b><br>
-        <b>State:</b> {station['state']}<br>
+        <b>Source:</b> {station.get('source', 'Unknown')}<br>
         """
         
         # Add station ID for ASOS stations
