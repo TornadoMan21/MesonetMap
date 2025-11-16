@@ -507,9 +507,9 @@ def create_combined_weather_map_centered_rockville(weather_data):
         icon=folium.Icon(color='red', icon='star')
     ).add_to(m)
     
-    # Add comprehensive legend
-    legend_html = f'''
-    <div style="position: fixed; 
+    # Add comprehensive legend (hidden on mobile devices)
+    legend_html = '''
+    <div id="weather-legend" style="position: fixed; 
                 bottom: 50px; left: 50px; width: 320px; height: 380px; 
                 background-color: white; border:2px solid grey; z-index:9999; 
                 font-size:11px; padding: 15px; border-radius: 10px;
@@ -545,6 +545,22 @@ def create_combined_weather_map_centered_rockville(weather_data):
     Data Sources: MD Mesonet, PA Keystone Mesonet, ASOS<br>
     Click on any station for detailed information
     </p>
+    
+    <style>
+    /* Hide legend on mobile devices */
+    @media only screen and (max-width: 768px) {
+        #weather-legend {
+            display: none !important;
+        }
+    }
+    
+    /* Further hide legend on very small screens */
+    @media only screen and (max-width: 480px) {
+        #weather-legend {
+            display: none !important;
+        }
+    }
+    </style>
     </div>
     '''
     
