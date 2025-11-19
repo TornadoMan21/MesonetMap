@@ -402,10 +402,10 @@ def create_combined_weather_map_centered_rockville(weather_data):
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
         
-        # Save as image
+        # Save as image with high resolution
         img_buffer = io.BytesIO()
         plt.savefig(img_buffer, format='png', transparent=True, bbox_inches='tight', 
-                   dpi=150, facecolor='none', edgecolor='none')
+                   dpi=300, facecolor='none', edgecolor='none')
         img_buffer.seek(0)
         img_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
         plt.close()

@@ -140,7 +140,7 @@ def create_pressure_contour_overlay(pressure_data):
     # Save to memory
     buffer = BytesIO()
     plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0, 
-               transparent=True, dpi=150)
+               transparent=True, dpi=300)
     buffer.seek(0)
     
     # Convert to base64 for web use

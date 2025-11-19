@@ -111,9 +111,9 @@ def generate_temperature_contours(weather_data):
     ax.set_yticks([])
     ax.axis('off')
     
-    # Save to memory
+    # Save to memory with high resolution
     buffer = BytesIO()
-    plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0, transparent=True, dpi=150)
+    plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0, transparent=True, dpi=300)
     buffer.seek(0)
     
     # Convert to base64 for web use
