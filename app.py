@@ -7,6 +7,9 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Get port from environment variable (Render.com requirement)
+PORT = int(os.environ.get('PORT', 5000))
+
 # Ensure maps directory exists
 MAPS_DIR = "maps"
 if not os.path.exists(MAPS_DIR):
@@ -171,7 +174,6 @@ if __name__ == '__main__':
     threading.Thread(target=update_maps_scheduled, daemon=True).start()
     
     # Run Flask app
-    port = int(os.environ.get('PORT', 5000))
-    print(f"Starting Flask app on port {port}")
-    print(f"Visit: http://localhost:{port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    print(f"Starting Flask app on port {PORT}")
+    print(f"Visit: http://localhost:{PORT}")
+    app.run(host='0.0.0.0', port=PORT, debug=False)
