@@ -256,8 +256,13 @@ def main():
             asos_stations = convert_asos_to_weather_data(asos_data)
             print(f"✓ Loaded {len(asos_stations)} ASOS weather stations")
         
-        # Combine all weather data
+        # Combine all weather data (memory optimized)
         combined_data = maryland_data + pennsylvania_data + virginia_data + newyork_data + asos_stations
+        
+        # Free intermediate data structures
+        del maryland_data, pennsylvania_data, virginia_data, newyork_data, asos_stations
+        import gc
+        gc.collect()
         
         if not combined_data:
             print("✗ No valid weather data found!")
@@ -283,6 +288,11 @@ def main():
         print(f"✓ Total weather stations (after deduplication): {len(all_weather_data)}")
         if len(all_weather_data) != len(combined_data):
             print(f"  Removed {len(combined_data) - len(all_weather_data)} duplicate stations")
+        
+        # Free memory from original combined data
+        del combined_data
+        import gc
+        gc.collect()
         
         # Create the combined weather map
         print("\nCreating combined weather map...")
@@ -366,13 +376,13 @@ def create_combined_weather_map_centered_rockville(weather_data):
     
     # Create pressure contours
     try:
-        # Define grid for interpolation with better resolution
+        # Define grid for interpolation with reduced resolution for memory optimization
         lat_min, lat_max = lats.min() - 0.5, lats.max() + 0.5
         lon_min, lon_max = lons.min() - 0.5, lons.max() + 0.5
         
-        # Create higher resolution grid for smoother contours
-        grid_lat = np.linspace(lat_min, lat_max, 80)
-        grid_lon = np.linspace(lon_min, lon_max, 80)
+        # Create lower resolution grid for memory efficiency (40x40 instead of 80x80)
+        grid_lat = np.linspace(lat_min, lat_max, 40)
+        grid_lon = np.linspace(lon_min, lon_max, 40)
         grid_lon_mesh, grid_lat_mesh = np.meshgrid(grid_lon, grid_lat)
         
         # Interpolate pressure data using linear method for stability
@@ -391,8 +401,8 @@ def create_combined_weather_map_centered_rockville(weather_data):
             print("Warning: No valid pressure data for contouring")
             raise ValueError("No valid pressure data")
         
-        # Generate contour plot
-        fig, ax = plt.subplots(figsize=(12, 8))
+        # Generate contour plot with reduced size for memory optimization
+        fig, ax = plt.subplots(figsize=(8, 6))  # Reduced from 12x8
         ax.set_xlim(lon_min, lon_max)
         ax.set_ylim(lat_min, lat_max)
         
@@ -415,13 +425,21 @@ def create_combined_weather_map_centered_rockville(weather_data):
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
         
-        # Save as image with high resolution
+        # Save as image with optimized resolution (200 DPI instead of 300)
         img_buffer = io.BytesIO()
         plt.savefig(img_buffer, format='png', transparent=True, bbox_inches='tight', 
-                   dpi=300, facecolor='none', edgecolor='none')
+                   dpi=200, facecolor='none', edgecolor='none')
         img_buffer.seek(0)
         img_base64 = base64.b64encode(img_buffer.read()).decode('utf-8')
         plt.close()
+        
+        # Clear matplotlib memory after contour generation
+        plt.clf()
+        plt.cla()
+        
+        # Force garbage collection to free memory
+        import gc
+        gc.collect()
         
         # Add pressure contour overlay to map
         folium.raster_layers.ImageOverlay(

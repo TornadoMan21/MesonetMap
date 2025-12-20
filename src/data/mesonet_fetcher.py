@@ -19,19 +19,13 @@ class MarylandMesonetFetcher:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         
-        # Maryland ASOS station list (major airports and frequently reporting stations)
+        # Maryland ASOS station list (essential stations only for memory efficiency)
         self.md_stations = [
             'BWI',  # Baltimore-Washington International (primary airport)
             'DCA',  # Ronald Reagan Washington National Airport
             'IAD',  # Washington Dulles International Airport
-            'ADW',  # Andrews Air Force Base
             'HGR',  # Hagerstown Regional Airport
-            'SBY',  # Salisbury-Ocean City Wicomico Regional Airport
-            'APG',  # Aberdeen Proving Ground
-            'FDK',  # Frederick Municipal Airport
-            'GAI',  # Montgomery County Airpark
-            'MTN',  # Martin State Airport
-            'ESN'   # Easton/Newnam Field Airport
+            'SBY'   # Salisbury-Ocean City Wicomico Regional Airport
         ]
     
     def fetch_current_data(self, hours_back=1):
@@ -542,16 +536,10 @@ class VirginiaMesonetFetcher:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         
-        # Virginia ASOS station list from the provided curl command
+        # Virginia ASOS station list (key stations only for memory efficiency)
         self.va_stations = [
-            '0V4', '0VG', '7W4', '8W2', 'AKQ', 'AVC', 'BCB', 'BKT', 'CHO', 'CJR',
-            'CPK', 'CXE', 'DAA', 'DAN', 'DCA', 'EMV', 'EZF', 'FAF', 'FCI', 'FKN',
-            'FRR', 'FVX', 'FYJ', 'GVE', 'HEF', 'HLX', 'HSP', 'HWY', 'IAD', 'JFZ',
-            'JGG', 'JYO', 'LFI', 'LKU', 'LNP', 'LUA', 'LVL', 'LYH', 'MFV', 'MKJ',
-            'MTV', 'NFE', 'NGU', 'NTU', 'NYG', 'OFP', 'OKV', 'OMH', 'ORF', 'PHF',
-            'PSK', 'PTB', 'PVG', 'RIC', 'RMN', 'ROA', 'SFQ', 'SHD', 'TGI', 'VBW',
-            'VJI', 'W13', 'W31', 'W45', 'W63', 'W75', 'W78', 'W81', 'W96', 'WAL',
-            'XSA'
+            'CHO', 'DAN', 'IAD', 'LYH', 'ORF', 'PHF', 'RIC', 'ROA', 'TGI', 'VBW',
+            'AKQ', 'EMV', 'NFE', 'SHD', 'WAL'
         ]
     
     def fetch_current_data(self, hours_back=1):
@@ -856,14 +844,10 @@ class NewYorkMesonetFetcher:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         
-        # New York ASOS station list (major airports and reporting stations)
+        # New York ASOS station list (major airports only for memory efficiency)
         self.ny_stations = [
-            'ALB', 'BGM', 'BUF', 'ELM', 'FRG', 'GFL', 'HPN', 'ISP', 'ITH', 'JFK',
-            'LGA', 'MSS', 'OGS', 'PBG', 'ROC', 'SWF', 'SYR', 'WHP', 'ART', 'AVP',
-            'BTV', 'CMK', 'DKK', 'EEN', 'EWB', 'FSO', 'GTB', 'HZL', 'IAG', 'JHW',
-            'LEB', 'MVL', 'NYC', 'ORH', 'PSF', 'PVD', 'RME', 'SAR', 'SCH', 'SLK',
-            'UCA', 'WAT', 'WST', '1B1', '3B0', '4B8', '6B6', 'B16', 'N12', 'N14',
-            'N20', 'N23', 'N40', 'N47', 'N48', 'N53', 'N57', 'N58', 'N72', 'N87'
+            'ALB', 'BGM', 'BUF', 'JFK', 'LGA', 'ROC', 'SYR', 'ISP', 'HPN', 'SWF',
+            'ITH', 'ELM', 'MSS', 'PBG'
         ]
     
     def fetch_current_data(self, hours_back=1):
@@ -1409,49 +1393,62 @@ def fetch_all_mesonet_data():
     """
     Fetch data from Maryland ASOS (DataFrame), Pennsylvania Keystone Mesonet (file), Virginia ASOS (DataFrame), New York ASOS (DataFrame), and additional ASOS stations
     Returns tuple: (maryland_data, pennsylvania_file, virginia_data, newyork_data, asos_data)
+    Memory-optimized version with reduced station counts
     """
+    import gc  # Garbage collection for memory optimization
+    
     print("=" * 60)
-    print("FETCHING WEATHER DATA")
+    print("FETCHING WEATHER DATA (Memory Optimized)")
     print("=" * 60)
-    print("Maryland: Using Iowa Environmental Mesonet ASOS API")
+    print("Maryland: Using Iowa Environmental Mesonet ASOS API (5 stations)")
     print("Pennsylvania: Using live WFS API data")
-    print("Virginia: Using Iowa Environmental Mesonet ASOS API")
-    print("New York: Using Iowa Environmental Mesonet ASOS API")
-    print("ASOS: Using local CSV data file")
+    print("Virginia: Using Iowa Environmental Mesonet ASOS API (15 stations)")
+    print("New York: Using Iowa Environmental Mesonet ASOS API (14 stations)")
+    print("ASOS: Using local CSV data file (reduced)")
     print()
     
     # Fetch Maryland ASOS data (returns DataFrame)
     print("1. Fetching Maryland ASOS data...")
     md_fetcher = MarylandMesonetFetcher()
     md_data = md_fetcher.fetch_current_data()
+    del md_fetcher  # Free memory
+    gc.collect()
     
-    time.sleep(1)  # Small delay between operations
+    time.sleep(0.5)  # Reduced delay for faster processing
     
     # Fetch Pennsylvania Keystone Mesonet data (returns file path)
     print("\n2. Fetching Pennsylvania data...")
     pa_fetcher = PennsylvaniaMesonetFetcher()
     pa_file = pa_fetcher.fetch_current_data()
+    del pa_fetcher  # Free memory
+    gc.collect()
     
-    time.sleep(1)  # Small delay between operations
+    time.sleep(0.5)  # Reduced delay for faster processing
     
     # Fetch Virginia ASOS data (returns DataFrame)
     print("\n3. Fetching Virginia ASOS data...")
     va_fetcher = VirginiaMesonetFetcher()
     va_data = va_fetcher.fetch_current_data()
+    del va_fetcher  # Free memory
+    gc.collect()
     
-    time.sleep(1)  # Small delay between operations
+    time.sleep(0.5)  # Reduced delay for faster processing
     
     # Fetch New York ASOS data (returns DataFrame)
     print("\n4. Fetching New York ASOS data...")
     ny_fetcher = NewYorkMesonetFetcher()
     ny_data = ny_fetcher.fetch_current_data()
+    del ny_fetcher  # Free memory
+    gc.collect()
     
-    time.sleep(1)  # Small delay between operations
+    time.sleep(0.5)  # Reduced delay for faster processing
     
-    # Load additional ASOS data
-    print("\n5. Loading additional ASOS data...")
+    # Load additional ASOS data (limited for memory)
+    print("\n5. Loading additional ASOS data (limited)...")
     asos_fetcher = ASOSFetcher()
     asos_data = asos_fetcher.fetch_current_data()
+    del asos_fetcher  # Free memory
+    gc.collect()
     
     print("\n" + "=" * 60)
     print("DATA FETCH SUMMARY")

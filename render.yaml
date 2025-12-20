@@ -3,7 +3,7 @@ services:
     name: mesonet-weather-map
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app --timeout 120 --workers 1
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app --timeout 300 --workers 1 --max-requests 100 --max-requests-jitter 50 --worker-class sync --worker-connections 1000 --preload
     plan: free
     envVars:
       - key: PYTHON_VERSION
