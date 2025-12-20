@@ -845,6 +845,307 @@ class VirginiaMesonetFetcher:
             return (37.5, -78.5)
 
 
+class NewYorkMesonetFetcher:
+    """Fetch data from New York ASOS stations via Iowa Environmental Mesonet API"""
+    
+    def __init__(self):
+        self.base_url = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
+        self.session = requests.Session()
+        # Set a proper user agent
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+        
+        # New York ASOS station list (major airports and reporting stations)
+        self.ny_stations = [
+            'ALB', 'BGM', 'BUF', 'ELM', 'FRG', 'GFL', 'HPN', 'ISP', 'ITH', 'JFK',
+            'LGA', 'MSS', 'OGS', 'PBG', 'ROC', 'SWF', 'SYR', 'WHP', 'ART', 'AVP',
+            'BTV', 'CMK', 'DKK', 'EEN', 'EWB', 'FSO', 'GTB', 'HZL', 'IAG', 'JHW',
+            'LEB', 'MVL', 'NYC', 'ORH', 'PSF', 'PVD', 'RME', 'SAR', 'SCH', 'SLK',
+            'UCA', 'WAT', 'WST', '1B1', '3B0', '4B8', '6B6', 'B16', 'N12', 'N14',
+            'N20', 'N23', 'N40', 'N47', 'N48', 'N53', 'N57', 'N58', 'N72', 'N87'
+        ]
+    
+    def fetch_current_data(self, hours_back=1):
+        """
+        Fetch current New York ASOS data from Iowa Environmental Mesonet API
+        """
+        try:
+            print("Fetching live New York ASOS data from Iowa Environmental Mesonet...")
+            
+            # Get current date for the API request
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            # Build the URL with multiple station parameters
+            base_params = {
+                'network': 'NY_ASOS',
+                'data': 'all',
+                'year1': now.year,
+                'month1': now.month,
+                'day1': now.day,
+                'year2': now.year,
+                'month2': now.month,
+                'day2': now.day,
+                'tz': 'Etc/UTC',
+                'format': 'onlycomma',
+                'latlon': 'no',
+                'elev': 'no',
+                'missing': 'M',
+                'trace': 'T',
+                'direct': 'no',
+                'report_type': '3',
+            }
+            
+            # Build URL manually to handle multiple station parameters
+            param_parts = []
+            for key, value in base_params.items():
+                param_parts.append(f"{key}={value}")
+            
+            # Add all stations
+            for station in self.ny_stations:
+                param_parts.append(f"station={station}")
+            
+            # Add second report type
+            param_parts.append("report_type=4")
+            
+            url_with_params = f"{self.base_url}?" + "&".join(param_parts)
+            
+            print(f"Requesting data from: {self.base_url}")
+            print(f"Date: {now.year}-{now.month:02d}-{now.day:02d}")
+            print(f"Stations: {len(self.ny_stations)} NY ASOS stations")
+            
+            # Make the request
+            response = self.session.get(url_with_params, timeout=30)
+            response.raise_for_status()
+            
+            print(f"✓ Response received - Status: {response.status_code}")
+            print(f"✓ Content type: {response.headers.get('content-type', 'unknown')}")
+            print(f"✓ Content length: {len(response.content)} bytes")
+            
+            # Save the response as CSV
+            temp_file = "temp_newyork_asos_data.csv"
+            with open(temp_file, 'w', encoding='utf-8', newline='') as f:
+                f.write(response.text)
+            
+            print(f"✓ New York ASOS data saved to: {temp_file}")
+            
+            # Verify the data by reading it
+            try:
+                df = pd.read_csv(temp_file)
+                print(f"✓ Successfully parsed CSV with {len(df)} records")
+                print(f"✓ Columns: {list(df.columns)}")
+                if len(df) > 0:
+                    print("✓ Sample data (first 2 rows):")
+                    print(df.head(2))
+                
+                # Process the data to standardize format
+                processed_df = self._process_iowa_mesonet_data(df)
+                return processed_df
+                
+            except Exception as parse_error:
+                print(f"Error parsing CSV: {parse_error}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            print(f"Error fetching New York ASOS data: {e}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
+    
+    def _process_iowa_mesonet_data(self, df):
+        """
+        Process Iowa Environmental Mesonet ASOS data format for New York stations
+        """
+        try:
+            print("Processing Iowa Environmental Mesonet New York ASOS data structure...")
+            
+            if len(df) == 0:
+                print("✗ No data in DataFrame")
+                return pd.DataFrame()
+            
+            print(f"Available columns: {list(df.columns)}")
+            
+            # Get unique stations (keep most recent reading per station)
+            if 'valid' in df.columns:
+                # Sort by time and keep last reading per station
+                df_sorted = df.sort_values(['station', 'valid'])
+                unique_stations = df_sorted.drop_duplicates(subset=['station'], keep='last')
+            else:
+                unique_stations = df.drop_duplicates(subset=['station'], keep='last')
+            
+            print(f"Processing {len(unique_stations)} unique New York ASOS stations...")
+            
+            processed_stations = []
+            
+            for idx, row in unique_stations.iterrows():
+                try:
+                    station_id = str(row['station'])
+                    
+                    # Coordinates
+                    if 'lat' in df.columns and 'lon' in df.columns:
+                        latitude = float(row['lat']) if pd.notna(row['lat']) else None
+                        longitude = float(row['lon']) if pd.notna(row['lon']) else None
+                    else:
+                        latitude, longitude = self._get_station_coordinates(station_id)
+                    
+                    if not latitude or not longitude:
+                        continue  # Skip stations without coordinates
+                    
+                    # Temperature (tmpf - already in Fahrenheit)
+                    temp_f = 70.0  # Default
+                    if 'tmpf' in df.columns and pd.notna(row['tmpf']) and row['tmpf'] != 'M':
+                        try:
+                            temp_f = float(row['tmpf'])
+                        except (ValueError, TypeError):
+                            temp_f = 70.0
+                    
+                    # Pressure (mslp - mean sea level pressure)
+                    pressure = 1013.25  # Default
+                    if 'mslp' in df.columns and pd.notna(row['mslp']) and row['mslp'] != 'M':
+                        try:
+                            pressure = float(row['mslp'])
+                        except (ValueError, TypeError):
+                            pressure = 1013.25
+                    elif 'alti' in df.columns and pd.notna(row['alti']) and row['alti'] != 'M':
+                        # Convert altimeter setting to approximate sea level pressure
+                        try:
+                            alti_inches = float(row['alti'])
+                            pressure = alti_inches * 33.863886  # Convert inches Hg to hPa
+                        except (ValueError, TypeError):
+                            pressure = 1013.25
+                    
+                    # Wind data
+                    wind_direction = None
+                    if 'drct' in df.columns and pd.notna(row['drct']) and row['drct'] != 'M':
+                        try:
+                            wind_direction = float(row['drct'])
+                        except (ValueError, TypeError):
+                            wind_direction = None
+                    
+                    wind_speed = None
+                    if 'sknt' in df.columns and pd.notna(row['sknt']) and row['sknt'] != 'M':
+                        try:
+                            wind_speed_kts = float(row['sknt'])
+                            wind_speed = wind_speed_kts * 1.15078  # Convert knots to mph
+                        except (ValueError, TypeError):
+                            wind_speed = None
+                    
+                    # Humidity
+                    humidity = None
+                    if 'relh' in df.columns and pd.notna(row['relh']) and row['relh'] != 'M':
+                        try:
+                            humidity = float(row['relh'])
+                        except (ValueError, TypeError):
+                            humidity = None
+                    
+                    station_data = {
+                        'public_name': f"NY ASOS {station_id}",
+                        'station_id': station_id,
+                        'Air_Temperature_2m_Avg': temp_f,  # Already in Fahrenheit
+                        'MSLP_Avg': pressure,
+                        'RelativeHumidity_2m_Avg': humidity if humidity is not None else 65.0,
+                        'WindSpeed_10m_Avg': wind_speed if wind_speed is not None else 5.0,
+                        'WindDirection_10m_Avg': wind_direction if wind_direction is not None else 270.0,
+                        'latitude': latitude,
+                        'longitude': longitude,
+                        'city': f"NY-{station_id}",
+                        'timestamp': row.get('valid', 'Unknown')
+                    }
+                    
+                    processed_stations.append(station_data)
+                    
+                except Exception as e:
+                    print(f"Error processing station {idx}: {e}")
+                    continue
+            
+            processed_df = pd.DataFrame(processed_stations)
+            print(f"✓ Successfully processed {len(processed_df)} New York ASOS stations")
+            return processed_df
+            
+        except Exception as e:
+            print(f"Error processing Iowa Mesonet New York data: {e}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
+    
+    def _get_station_coordinates(self, station_id):
+        """
+        Get coordinates for New York ASOS stations
+        """
+        # New York ASOS station coordinates
+        ny_asos_coords = {
+            'ALB': (42.7483, -73.8017),  # Albany International Airport
+            'BGM': (42.2081, -75.9797),  # Greater Binghamton Airport
+            'BUF': (42.9403, -78.7322),  # Buffalo Niagara International Airport
+            'ELM': (42.1597, -76.8917),  # Elmira/Corning Regional Airport
+            'FRG': (40.7286, -73.4136),  # Republic Airport (Farmingdale)
+            'GFL': (43.3403, -73.6103),  # Floyd Bennett Memorial Airport
+            'HPN': (41.0669, -73.7078),  # Westchester County Airport
+            'ISP': (40.7953, -73.1003),  # Long Island MacArthur Airport
+            'ITH': (42.4831, -76.4581),  # Ithaca Tompkins International Airport
+            'JFK': (40.6397, -73.7789),  # John F. Kennedy International Airport
+            'LGA': (40.7769, -73.8740),  # LaGuardia Airport
+            'MSS': (44.9356, -74.8456),  # Massena International Airport
+            'OGS': (44.6819, -75.4656),  # Ogdensburg International Airport
+            'PBG': (44.6508, -73.4681),  # Plattsburgh International Airport
+            'ROC': (43.1189, -77.6722),  # Greater Rochester International Airport
+            'SWF': (41.5042, -74.1048),  # Stewart International Airport
+            'SYR': (43.1119, -76.1063),  # Syracuse Hancock International Airport
+            'WHP': (41.0669, -73.7078),  # Westchester County Airport
+            'ART': (44.2608, -75.9644),  # Watertown International Airport
+            'AVP': (41.3375, -75.7244),  # Wilkes-Barre/Scranton International Airport
+            'BTV': (44.4719, -73.1531),  # Burlington International Airport
+            'CMK': (42.7292, -73.7033),  # Cooperstown-Westville Airport
+            'DKK': (42.2156, -76.7764),  # Chautauqua County-Dunkirk Airport
+            'EEN': (42.5831, -78.1894),  # Keuka Lake Airport
+            'EWB': (41.8403, -74.3447),  # New Bedford Regional Airport
+            'FSO': (42.4292, -74.2528),  # Fulton County Airport
+            'GTB': (43.3403, -73.6103),  # Glens Falls Airport
+            'HZL': (42.1597, -77.7881),  # Hazleton Regional Airport
+            'IAG': (43.1072, -78.9464),  # Niagara Falls International Airport
+            'JHW': (42.1531, -77.0622),  # Chautauqua County-Jamestown Airport
+            'LEB': (43.6261, -72.3042),  # Lebanon Municipal Airport
+            'MVL': (42.6119, -73.5831),  # Morrisville-Stowe State Airport
+            'NYC': (40.7831, -73.9667),  # Central Park (New York City)
+            'ORH': (42.2675, -71.8756),  # Worcester Regional Airport
+            'PSF': (44.2306, -72.5625),  # Pittsfield Municipal Airport
+            'PVD': (41.7300, -71.4331),  # T.F. Green Airport
+            'RME': (43.7808, -75.4069),  # Griffiss International Airport (Rome)
+            'SAR': (42.7828, -73.7844),  # Adirondack Regional Airport
+            'SCH': (42.8528, -73.9289),  # Schenectady County Airport
+            'SLK': (44.3850, -74.2064),  # Adirondack Regional Airport
+            'UCA': (42.9403, -78.3697),  # Oneida County Airport
+            'WAT': (43.4847, -75.2669),  # Watertown International Airport
+            'WST': (42.4292, -73.7086),  # Westfield-Barnes Regional Airport
+            '1B1': (42.6411, -73.2394),  # Columbia County Airport
+            '3B0': (42.8631, -73.8897),  # Schenectady County Airport
+            '4B8': (43.3403, -74.3447),  # Saratoga County Airport
+            '6B6': (42.8292, -73.9289),  # Albany-Shaker Road Airport
+            'B16': (43.4847, -74.2669),  # Fulton County Airport
+            'N12': (40.8781, -72.8636),  # Brookhaven Calabro Airport
+            'N14': (40.8272, -73.4136),  # Bayport Aerodrome
+            'N20': (41.2019, -73.7078),  # Danbury Municipal Airport
+            'N23': (40.8956, -73.4136),  # Linden Airport
+            'N40': (40.9522, -73.4136),  # Sky Manor Airport
+            'N47': (40.8272, -74.4136),  # Cross Keys Airport
+            'N48': (41.0669, -74.7078),  # Blairstown Airport
+            'N53': (40.8272, -74.1136),  # Somerset Airport
+            'N57': (40.8272, -74.8136),  # Princeton Airport
+            'N58': (41.0669, -74.2078),  # Andover Airport
+            'N72': (40.8272, -73.9136),  # Old Bridge Airport
+            'N87': (41.0669, -73.9078)   # Candlelight Farms Airport
+        }
+        
+        coords = ny_asos_coords.get(station_id)
+        if coords:
+            return coords
+        else:
+            # Default to central New York
+            print(f"Warning: No coordinates found for station {station_id}")
+            return (42.9, -76.0)
+
+
 class ASOSFetcher:
     """Fetch data from ASOS (Automated Surface Observing System) stations using local CSV file"""
     
@@ -1106,8 +1407,8 @@ class PennsylvaniaMesonetFetcher:
 
 def fetch_all_mesonet_data():
     """
-    Fetch data from Maryland ASOS (DataFrame), Pennsylvania Keystone Mesonet (file), Virginia ASOS (DataFrame), and additional ASOS stations
-    Returns tuple: (maryland_data, pennsylvania_file, virginia_data, asos_data)
+    Fetch data from Maryland ASOS (DataFrame), Pennsylvania Keystone Mesonet (file), Virginia ASOS (DataFrame), New York ASOS (DataFrame), and additional ASOS stations
+    Returns tuple: (maryland_data, pennsylvania_file, virginia_data, newyork_data, asos_data)
     """
     print("=" * 60)
     print("FETCHING WEATHER DATA")
@@ -1115,6 +1416,7 @@ def fetch_all_mesonet_data():
     print("Maryland: Using Iowa Environmental Mesonet ASOS API")
     print("Pennsylvania: Using live WFS API data")
     print("Virginia: Using Iowa Environmental Mesonet ASOS API")
+    print("New York: Using Iowa Environmental Mesonet ASOS API")
     print("ASOS: Using local CSV data file")
     print()
     
@@ -1139,8 +1441,15 @@ def fetch_all_mesonet_data():
     
     time.sleep(1)  # Small delay between operations
     
+    # Fetch New York ASOS data (returns DataFrame)
+    print("\n4. Fetching New York ASOS data...")
+    ny_fetcher = NewYorkMesonetFetcher()
+    ny_data = ny_fetcher.fetch_current_data()
+    
+    time.sleep(1)  # Small delay between operations
+    
     # Load additional ASOS data
-    print("\n4. Loading additional ASOS data...")
+    print("\n5. Loading additional ASOS data...")
     asos_fetcher = ASOSFetcher()
     asos_data = asos_fetcher.fetch_current_data()
     
@@ -1159,19 +1468,28 @@ def fetch_all_mesonet_data():
     else:
         va_count = "Processing error" if isinstance(va_data, str) else 0
     
+    if isinstance(ny_data, pd.DataFrame):
+        ny_count = len(ny_data) if not ny_data.empty else 0
+    else:
+        ny_count = "Processing error" if isinstance(ny_data, str) else 0
+    
     print(f"Maryland ASOS stations: {md_count}")
     print(f"Pennsylvania file: {pa_file}")
     print(f"Virginia ASOS stations: {va_count}")
+    print(f"New York ASOS stations: {ny_count}")
     print(f"Additional ASOS stations: {len(asos_data) if asos_data else 0}")
     
-    return md_data, pa_file, va_data, asos_data
+    return md_data, pa_file, va_data, ny_data, asos_data
 
 def clean_temp_files():
     """Clean up temporary data files"""
     temp_files = [
         "temp_maryland_data.csv",
+        "temp_maryland_asos_data.csv",
         "temp_pennsylvania_data.csv",
-        "temp_pennsylvania_data.json"
+        "temp_pennsylvania_data.json",
+        "temp_virginia_asos_data.csv", 
+        "temp_newyork_asos_data.csv"
     ]
     
     cleaned_count = 0

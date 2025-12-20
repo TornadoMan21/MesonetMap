@@ -26,7 +26,7 @@ def generate_weather_map():
         print(f"Generating weather map at {datetime.now()}")
         
         # Fetch data from all sources
-        md_data, pa_file, va_data, asos_data = fetch_all_mesonet_data()
+        md_data, pa_file, va_data, ny_data, asos_data = fetch_all_mesonet_data()
         
         # Process Maryland data
         maryland_data = []
@@ -58,13 +58,18 @@ def generate_weather_map():
         if hasattr(va_data, 'empty') and not va_data.empty:
             virginia_data = convert_mesonet_to_weather_data(va_data)
         
+        # Process New York data
+        newyork_data = []
+        if hasattr(ny_data, 'empty') and not ny_data.empty:
+            newyork_data = convert_mesonet_to_weather_data(ny_data)
+        
         # Process ASOS data
         asos_stations = []
         if asos_data:
             asos_stations = convert_asos_to_weather_data(asos_data)
         
         # Combine all data with deduplication
-        combined_data = maryland_data + pennsylvania_data + virginia_data + asos_stations
+        combined_data = maryland_data + pennsylvania_data + virginia_data + newyork_data + asos_stations
         all_weather_data = []
         seen_locations = set()
         

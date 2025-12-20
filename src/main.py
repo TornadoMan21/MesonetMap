@@ -110,7 +110,7 @@ def main():
         print("TESTING WEATHER DATA FETCHING WITH DEBUG INFO")
         print("="*50)
         
-        md_data, pa_file, va_data, asos_data = fetch_all_mesonet_data()
+        md_data, pa_file, va_data, ny_data, asos_data = fetch_all_mesonet_data()
         
         print(f"\nResults:")
         
@@ -125,9 +125,15 @@ def main():
         except:
             va_count = "Processing error"
         
+        try:
+            ny_count = len(ny_data) if hasattr(ny_data, '__len__') and hasattr(ny_data, 'empty') and not ny_data.empty else 0
+        except:
+            ny_count = "Processing error"
+        
         print(f"Maryland ASOS stations: {md_count}")
         print(f"Pennsylvania file: {pa_file}")
         print(f"Virginia ASOS stations: {va_count}")
+        print(f"New York ASOS stations: {ny_count}")
         print(f"Additional ASOS stations: {len(asos_data) if asos_data else 0}")
         
         # Save Maryland data to file for inspection
@@ -203,14 +209,15 @@ def main():
     
     try:
         # Fetch mesonet data and ASOS data
-        print("\nFetching data from Maryland ASOS, Pennsylvania mesonet, Virginia ASOS, and additional ASOS stations...")
-        md_data, pa_file, va_data, asos_data = fetch_all_mesonet_data()
+        print("\nFetching data from Maryland ASOS, Pennsylvania mesonet, Virginia ASOS, New York ASOS, and additional ASOS stations...")
+        md_data, pa_file, va_data, ny_data, asos_data = fetch_all_mesonet_data()
         
         # Check data availability with proper type checking
         md_has_data = hasattr(md_data, 'empty') and not md_data.empty
         va_has_data = hasattr(va_data, 'empty') and not va_data.empty
+        ny_has_data = hasattr(ny_data, 'empty') and not ny_data.empty
         
-        if not md_has_data and not pa_file and not va_has_data and not asos_data:
+        if not md_has_data and not pa_file and not va_has_data and not ny_has_data and not asos_data:
             print("✗ Failed to fetch any weather data!")
             print("\n💡 Suggestions:")
             print("   1. Check your internet connection")
@@ -237,6 +244,12 @@ def main():
             virginia_data = convert_mesonet_to_weather_data(va_data)
             print(f"✓ Loaded {len(virginia_data)} Virginia ASOS stations")
         
+        # Process New York data
+        newyork_data = []
+        if hasattr(ny_data, 'empty') and not ny_data.empty:
+            newyork_data = convert_mesonet_to_weather_data(ny_data)
+            print(f"✓ Loaded {len(newyork_data)} New York ASOS stations")
+        
         # Process ASOS data (already processed by fetcher)
         asos_stations = []
         if asos_data:
@@ -244,7 +257,7 @@ def main():
             print(f"✓ Loaded {len(asos_stations)} ASOS weather stations")
         
         # Combine all weather data
-        combined_data = maryland_data + pennsylvania_data + virginia_data + asos_stations
+        combined_data = maryland_data + pennsylvania_data + virginia_data + newyork_data + asos_stations
         
         if not combined_data:
             print("✗ No valid weather data found!")
@@ -542,7 +555,7 @@ def create_combined_weather_map_centered_rockville(weather_data):
     
     <p style="margin: 2px 0; font-size: 10px;"><b>⭐ Red star:</b> Rockville, MD</p>
     <p style="margin: 2px 0; font-size: 9px; color: #666;">
-    Data Sources: MD Mesonet, PA Keystone Mesonet, ASOS<br>
+    Data Sources: MD, PA, VA, NY Mesonets & ASOS<br>
     Click on any station for detailed information
     </p>
     
